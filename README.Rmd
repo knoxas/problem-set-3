@@ -104,7 +104,7 @@ raw_data | awk '$4 == "6hpi"' | sort -k6nr | head -n 1 | cut -f2
 
 ```{r}
 # translate to dplyr code
-filter(cleaned_data, time.point == 'hpi.6') %>% arrange(desc(value)) %>% head(., 1) %>% select(., plant)
+filter(cleaned_data, time.point == 'hpi.6') %>% arrange(desc(value)) %>% head(1) %>% select(plant)
 
 ```
 
@@ -116,7 +116,7 @@ raw_data | awk '$4 == "18hpi"' | sort -k6nr | head -n 1 | cut -f2,3
 
 ```{r}
 # translate to dplyr code
-filter(cleaned_data, time.point == 'hpi.18') %>% arrange(desc(value)) %>% head(., 1) %>% select(., plant, fungus)
+filter(cleaned_data, time.point == 'hpi.18') %>% arrange(desc(value)) %>% head(1) %>% select(plant, fungus)
 ```
 
 ## Problem 3
@@ -143,20 +143,20 @@ tidy_data
 4. Sort by these statistics and use the `dplyr` verb `slice` to pull the ones you want (i.e., the top 3). Note you will have to remove `gene.name` from the grouping so that sorting works.
 
 ```{r problem_3}
-cleaned_data %>%  mutate(time.point = str_replace(time.point, 'hpi', ''), time.point = str_c('hpi', time.point)) %>% spread(time.point, value) -> tidy_data
+cleaned_data %>%  mutate(time.point = str_replace(time.point, 'hpi', ''), time.point = str_c('hpi', time.point)) %>% spread(time.point, value) %>% select(gene.name, plant, fungus, rep, hpi.6, hpi.12, hpi.18, hpi.24) -> tidy_data
 #calculate expression difference between 6 and 24 hours
 tidy_data %>% mutate(exp.diff = hpi.24 - hpi.6) %>%
 #group by gene, plant, and fungus, then calculate mean expression difference and variance of expression variance
-group_by(gene.name, plant, fungus) %>% summarise(., mean.exp.diff = mean(exp.diff), exp.var = var(exp.diff)) %>% ungroup(gene.name) %>%
+group_by(gene.name, plant, fungus) %>% summarise(mean.exp.diff = mean(exp.diff), exp.var = var(exp.diff)) %>% ungroup(gene.name) %>%
 #sort mean and variance of expression difference to get highest at top, show top 3, then select the gene names
-arrange(desc(mean.exp.diff, exp.var)) %>% head (3) %>% select(gene.name) 
+arrange(desc(mean.exp.diff, exp.var)) %>% head(3) %>% select(gene.name) 
 ```
 
 ## Problem 4
 
 Now examine the above final data frame above and write a few sentences putting inline code in least 3 places. For example, There are `r nrow(mtcars)` rows of data in `mtcars`.
 
-My cleaned data has 'r ncol(cleaned_data)' columns and 'r nrow(cleaned_data' rows. My tidy data, which separates the 6, 18, and 24 hour time pints into separate columns, set has 'r ncol(tidy_data)' columns and 'r nrow(tidy_data)' rows. The mean of the hpi.24 columns is 'r mean(tidy_data, hpi.24)' and the standard deviation is 'r sd(tidy_data, hpi.24)'.
+My cleaned data has `r ncol(cleaned_data)` columns and `r nrow(cleaned_data)` rows. My tidy data, which separates the 6, 18, and 24 hour time points into separate columns, has `r ncol(tidy_data)` columns and `r nrow(tidy_data)` rows. The mean of the hpi.24 columns is `r mean(tidy_data$hpi.24)` and the standard deviation is `r sd(tidy_data$hpi.24)`.
 
 ## Problem 5
 
@@ -175,16 +175,22 @@ Extra credit: add error bars to the plot (use `geom_errorbar`).
 ```{r problem_5}
 #make new table containing time points and all expression data for the genes in problem 3
 tidy_data %>% mutate(exp.diff = hpi.24 - hpi.6) %>% 
-  group_by(gene.name, plant, fungus) %>% summarise(., mean.exp.diff = mean(exp.diff), exp.var = var(exp.diff)) %>% ungroup(gene.name) %>% arrange(desc(mean.exp.diff, exp.var)) %>% head (3) %>% select(gene.name) -> top3genes
- #this table is a subset of cleaned_data tbl showing only the gene names from the "top 3 genes" list, found above; I know this isn't quite right because I have 144 rows and should only have 36. Do I need to group things differently?
-cleaned_data %>% semi_join(top3genes,by = "gene.name") -> cleaned_top3genes
+  group_by(gene.name, plant, fungus) %>% summarise(., mean.exp.diff = mean(exp.diff), exp.var = var(exp.diff)) %>% ungroup(gene.name) %>% arrange(desc(mean.exp.diff, exp.var)) %>% head(3) %>% select(gene.name) -> top3genes
 
-#make table showing average expression across timepoints
-cleaned_top3genes %>% group_by(gene.name, time.point) %>% mutate("avg.expr" = mean(value)) -> cleaned_top3genes_expr
-cleaned_top3genes_expr
+cleaned_data %>% semi_join(top3genes,by = "gene.name") %>% mutate(time.point = str_replace(time.point, 'hpi.', ''), time.point = as.numeric(time.point)) -> top3genes_expr
+
+#finding average expression of these genes across replicates; not needed since we want to plot individual reps according to the question, but I worked on it for awhile and it seemed useful to have
+#cleaned_top3genes %>% group_by(gene.name, time.point) %>% mutate("avg.expr" = mean(value)) %>% ungroup() %>% mutate(time.point = str_replace(time.point, 'hpi.', '')) %>% group_by(gene.name, plant, fungus, avg.expr) %>% distinct(., .keep_all = TRUE) %>% select(gene.name, plant, fungus, time.point, avg.expr) -> topgenes_avg_expr
 
 #plot the points
-ggplot(cleaned_top3genes_expr, aes(x = time.point, y = value)) + geom_point(aes(color = gene.name, shape = rep)) + geom_smooth(method = 'lm')
+ggplot(top3genes_expr, aes(x = time.point, y = value)) + geom_point(aes(color = gene.name, shape = rep)) + 
+geom_smooth(method = 'lm', se = FALSE) +
+theme_bw() +
+xlab('Time') +
+ylab('Gene Expression') +
+ggtitle('Gene Expression Over Time in Plant/Fungus Pairs') +
+facet_grid(plant ~ fungus) 
+
  
 
 
